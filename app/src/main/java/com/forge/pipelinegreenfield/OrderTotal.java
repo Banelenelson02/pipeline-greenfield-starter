@@ -28,7 +28,7 @@ public class OrderTotal {
         double discounted = applyDiscount(subtotal, discountRate);
         // BUG is somewhere below — tax should be calculated on the
         // discounted amount, not the original subtotal.
-        double taxAmount = subtotal * taxRate;
+        double taxAmount = discounted * taxRate;
         return discounted + taxAmount;
     }
 
