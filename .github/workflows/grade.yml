@@ -1,0 +1,83 @@
+# Automated grading — DO NOT EDIT.
+# Runs on every push and checks your submission against CHECKLIST.md.
+# Results show up in the job summary below the run, and this workflow's own
+# pass/fail badge is your green check.
+
+name: Grade Submission
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check ci.yml structure
+        id: yaml_check
+        run: |
+          pip install -q pyyaml
+          python3 scripts/check_ci_yaml.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run app tests (bug must actually be fixed)
+        id: test_check
+        working-directory: app
+        run: |
+          echo "### Test results" >> "$GITHUB_STEP_SUMMARY"
+          if mvn -B test; then
+            echo "PASS: all tests pass (bug is fixed)" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "FAIL: tests still failing — the bug in OrderTotal.java is not fixed yet" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Build Docker image
+        id: docker_check
+        run: |
+          echo "### Docker build" >> "$GITHUB_STEP_SUMMARY"
+          if docker build -t pipeline-greenfield-grading ./app; then
+            echo "PASS: Docker image builds" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "FAIL: Docker image did not build — check app/Dockerfile" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Check Dockerfile is multi-stage
+        run: |
+          from_count=$(grep -c "^FROM" app/Dockerfile || true)
+          if [ "$from_count" -ge 2 ]; then
+            echo "PASS: Dockerfile has $from_count FROM stages (multi-stage)" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "FAIL: Dockerfile only has $from_count FROM stage(s) — should be multi-stage" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Confirm grade.yml was not edited
+        run: |
+          # Simple guard: fail loudly if this file's job name changed, since
+          # that's the easiest sign someone modified the grader itself.
+          grep -q "Grade Submission" .github/workflows/grade.yml || \
+            (echo "FAIL: grade.yml appears to have been modified" | tee -a "$GITHUB_STEP_SUMMARY" && exit 1)
+
+      - name: Check SUBMISSION.md has real reflection, not a placeholder
+        run: |
+          echo "### Reflection" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/check_reflection.py SUBMISSION.md 25 \
+            "What I built or fixed" "How I found it" "Why it works" \
+            "What would tip me off faster next time" | tee -a "$GITHUB_STEP_SUMMARY"
+
