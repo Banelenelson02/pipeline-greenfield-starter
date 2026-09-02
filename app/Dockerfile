@@ -9,7 +9,7 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 # TODO: COPY pom.xml . then RUN mvn -q dependency:go-offline (caches deps)
 COPY pom.xml .
-RUN mvn -q dependency: go-offline
+RUN mvn -q dependency:go-offline
 # TODO: COPY src ./src then RUN mvn -q clean package -DskipTests
 COPY src ./src
 RUN mvn -q clean package -DskipTests
